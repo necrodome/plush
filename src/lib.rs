@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn test_function_definition() {
-        let source = "let f = fn(x) { x * 2 }; f(21)";
+        let source = "let f = |x| x * 2; f(21)";
         let prog = parse_str(source).unwrap();
         let mut prog = prog;
         prog.resolve_syms().unwrap();
@@ -165,8 +165,8 @@ mod tests {
     #[test]
     fn test_factorial() {
         let source = r#"
-            let factorial = fn(n) {
-                if n <= 1 { 1 } else { n * factorial(n - 1) }
+            let factorial = |n| {
+                if (n <= 1) { 1 } else { n * factorial(n - 1) }
             };
             factorial(5)
         "#;
@@ -186,8 +186,8 @@ mod tests {
     #[test]
     fn test_fibonacci() {
         let source = r#"
-            let fib = fn(n) {
-                if n <= 1 { n } else { fib(n - 1) + fib(n - 2) }
+            let fib = |n| {
+                if (n <= 1) { n } else { fib(n - 1) + fib(n - 2) }
             };
             fib(10)
         "#;
@@ -215,8 +215,8 @@ mod tests {
         let ret = VM::call(&mut vm, main_fn, vec![]);
 
         match ret {
-            Value::String(s) => {
-                let str_val = unsafe { (*s).to_str() };
+            Value::String(_) => {
+                let str_val = ret.unwrap_rust_str();
                 assert_eq!(str_val, "Hello World");
             }
             _ => panic!("Expected String, got {:?}", ret),
@@ -258,8 +258,8 @@ mod tests {
     #[test]
     fn test_closure() {
         let source = r#"
-            let make_adder = fn(x) {
-                fn(y) { x + y }
+            let make_adder = |x| {
+                |y| x + y
             };
             let add5 = make_adder(5);
             add5(10)
@@ -302,7 +302,7 @@ mod tests {
             let sum = 0;
             let i = 0;
             loop {
-                if i >= 5 { break; }
+                if (i >= 5) { break; }
                 sum = sum + i;
                 i = i + 1;
             }
@@ -373,8 +373,8 @@ mod tests {
     #[test]
     fn test_nested_functions() {
         let source = r#"
-            let outer = fn(x) {
-                let inner = fn(y) { x + y };
+            let outer = |x| {
+                let inner = |y| x + y;
                 inner(10) + inner(20)
             };
             outer(5)

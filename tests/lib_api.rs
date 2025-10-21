@@ -45,7 +45,7 @@ fn test_complex_expression() {
 #[test]
 fn test_function_with_multiple_params() {
     let source = r#"
-        let add = fn(a, b, c) { a + b + c };
+        let add = |a, b, c| { a + b + c };
         add(1, 2, 3)
     "#;
 
@@ -66,8 +66,8 @@ fn test_function_with_multiple_params() {
 #[test]
 fn test_recursive_sum() {
     let source = r#"
-        let sum = fn(n) {
-            if n <= 0 { 0 } else { n + sum(n - 1) }
+        let sum = |n| {
+            if (n <= 0) { 0 } else { n + sum(n - 1) }
         };
         sum(100)
     "#;
@@ -125,8 +125,8 @@ fn test_string_concatenation() {
     let result = VM::call(&mut vm, main_fn, vec![]);
 
     match result {
-        Value::String(s) => {
-            let str_val = unsafe { (*s).to_str() };
+        Value::String(_) => {
+            let str_val = result.unwrap_rust_str();
             assert_eq!(str_val, "Hello World!");
         }
         _ => panic!("Expected String, got {:?}", result),
@@ -136,9 +136,9 @@ fn test_string_concatenation() {
 #[test]
 fn test_nested_closures() {
     let source = r#"
-        let outer = fn(x) {
-            let middle = fn(y) {
-                let inner = fn(z) {
+        let outer = |x| {
+            let middle = |y| {
+                let inner = |z| {
                     x + y + z
                 };
                 inner
@@ -190,8 +190,8 @@ fn test_object_nested_access() {
 #[test]
 fn test_conditional_expressions() {
     let source = r#"
-        let max = fn(a, b) {
-            if a > b { a } else { b }
+        let max = |a, b| {
+            if (a > b) { a } else { b }
         };
         max(42, 17)
     "#;
@@ -216,7 +216,7 @@ fn test_loop_iteration() {
         let product = 1;
         let i = 1;
         loop {
-            if i > 5 { break; }
+            if (i > 5) { break; }
             product = product * i;
             i = i + 1;
         }
@@ -328,11 +328,11 @@ fn test_array_push_and_length() {
 #[test]
 fn test_mutual_recursion() {
     let source = r#"
-        let is_even = fn(n) {
-            if n == 0 { true } else { is_odd(n - 1) }
+        let is_even = |n| {
+            if (n == 0) { true } else { is_odd(n - 1) }
         };
-        let is_odd = fn(n) {
-            if n == 0 { false } else { is_even(n - 1) }
+        let is_odd = |n| {
+            if (n == 0) { false } else { is_even(n - 1) }
         };
         is_even(10)
     "#;
