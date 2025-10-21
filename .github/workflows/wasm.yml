@@ -1,0 +1,371 @@
+name: WebAssembly Build and Test
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/wasm.yml'
+      - 'build-wasm.sh'
+      - 'tests/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'src/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/wasm.yml'
+      - 'build-wasm.sh'
+
+jobs:
+  # Build and test the library without SDL (to verify Wasm compatibility)
+  lib-no-sdl:
+    name: Library build (no SDL)
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-lib-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Build library without SDL
+      run: cargo build --lib --no-default-features
+
+    - name: Run library tests without SDL
+      run: cargo test --lib --no-default-features
+
+    - name: Check library documentation
+      run: cargo doc --lib --no-default-features --no-deps
+
+  # Build for WebAssembly target
+  wasm-build:
+    name: WebAssembly build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo index
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Cache cargo build
+      uses: actions/cache@v3
+      with:
+        path: target
+        key: ${{ runner.os }}-cargo-build-wasm-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+    - name: Build with wasm-pack (web target)
+      run: wasm-pack build --target web --no-default-features
+
+    - name: Check wasm-pack output
+      run: |
+        echo "Checking wasm-pack output..."
+        ls -lh pkg/
+        test -f pkg/plush_bg.wasm
+        test -f pkg/plush.js
+        test -f pkg/plush.d.ts
+        test -f pkg/package.json
+        echo "✓ All expected files present"
+
+    - name: Check Wasm file size
+      run: |
+        WASM_SIZE=$(stat -f%z pkg/plush_bg.wasm 2>/dev/null || stat -c%s pkg/plush_bg.wasm)
+        echo "Wasm file size: $WASM_SIZE bytes ($(numfmt --to=iec-i --suffix=B $WASM_SIZE))"
+        # Fail if Wasm file is unreasonably large (>10MB unoptimized)
+        if [ $WASM_SIZE -gt 10485760 ]; then
+          echo "ERROR: Wasm file is too large!"
+          exit 1
+        fi
+
+    - name: Upload Wasm artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: wasm-build-web
+        path: pkg/
+        retention-days: 7
+
+  # Build for different Wasm targets
+  wasm-build-targets:
+    name: WebAssembly build (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [nodejs, bundler]
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+    - name: Install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+    - name: Build with wasm-pack (${{ matrix.target }})
+      run: wasm-pack build --target ${{ matrix.target }} --no-default-features
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: wasm-build-${{ matrix.target }}
+        path: pkg/
+        retention-days: 7
+
+  # Test Wasm in Node.js environment
+  wasm-test-nodejs:
+    name: Test Wasm in Node.js
+    runs-on: ubuntu-latest
+    needs: wasm-build-targets
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Download Wasm artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: wasm-build-nodejs
+        path: pkg/
+
+    - name: Create test directory
+      run: mkdir -p test-wasm
+
+    - name: Create Node.js test file
+      run: |
+        cat > test-wasm/test.js << 'EOF'
+        const { plush_eval, PlushVM } = require('../pkg/plush.js');
+
+        console.log('Testing Plush WebAssembly in Node.js...\n');
+
+        // Test 1: Simple evaluation
+        console.log('Test 1: Simple arithmetic');
+        const result1 = plush_eval('1 + 2 * 3');
+        console.log('  Result:', result1);
+        if (!result1.includes('7')) {
+          console.error('  ✗ FAILED: Expected result to contain 7');
+          process.exit(1);
+        }
+        console.log('  ✓ PASSED\n');
+
+        // Test 2: Function definition and call
+        console.log('Test 2: Function definition');
+        const result2 = plush_eval('let f = fn(x) { x * 2 }; f(21)');
+        console.log('  Result:', result2);
+        if (!result2.includes('42')) {
+          console.error('  ✗ FAILED: Expected result to contain 42');
+          process.exit(1);
+        }
+        console.log('  ✓ PASSED\n');
+
+        // Test 3: Factorial
+        console.log('Test 3: Recursive factorial');
+        const result3 = plush_eval(`
+          let factorial = fn(n) {
+            if n <= 1 { 1 } else { n * factorial(n - 1) }
+          };
+          factorial(5)
+        `);
+        console.log('  Result:', result3);
+        if (!result3.includes('120')) {
+          console.error('  ✗ FAILED: Expected result to contain 120');
+          process.exit(1);
+        }
+        console.log('  ✓ PASSED\n');
+
+        // Test 4: String operations
+        console.log('Test 4: String concatenation');
+        const result4 = plush_eval('let a = "Hello"; let b = "World"; a + " " + b');
+        console.log('  Result:', result4);
+        if (!result4.includes('Hello World')) {
+          console.error('  ✗ FAILED: Expected result to contain "Hello World"');
+          process.exit(1);
+        }
+        console.log('  ✓ PASSED\n');
+
+        // Test 5: Arrays
+        console.log('Test 5: Array operations');
+        const result5 = plush_eval('let arr = [1, 2, 3]; arr.length');
+        console.log('  Result:', result5);
+        if (!result5.includes('3')) {
+          console.error('  ✗ FAILED: Expected result to contain 3');
+          process.exit(1);
+        }
+        console.log('  ✓ PASSED\n');
+
+        // Test 6: PlushVM class
+        console.log('Test 6: PlushVM class');
+        try {
+          const vm = new PlushVM('let x = 100; x + 23');
+          const result6 = vm.run();
+          console.log('  Result:', result6);
+          if (!result6.includes('123')) {
+            console.error('  ✗ FAILED: Expected result to contain 123');
+            process.exit(1);
+          }
+          console.log('  ✓ PASSED\n');
+        } catch (e) {
+          console.error('  ✗ FAILED:', e.message);
+          process.exit(1);
+        }
+
+        // Test 7: Error handling
+        console.log('Test 7: Error handling');
+        try {
+          plush_eval('this is invalid syntax!!!');
+          console.error('  ✗ FAILED: Should have thrown an error');
+          process.exit(1);
+        } catch (e) {
+          console.log('  Caught expected error:', e.message.substring(0, 50) + '...');
+          console.log('  ✓ PASSED\n');
+        }
+
+        console.log('All tests passed! ✓');
+        EOF
+
+    - name: Run Node.js tests
+      run: node test-wasm/test.js
+
+  # Verify build script works
+  wasm-build-script:
+    name: Test build-wasm.sh script
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+
+    - name: Install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+    - name: Make build script executable
+      run: chmod +x build-wasm.sh
+
+    - name: Test build script help
+      run: ./build-wasm.sh --help
+
+    - name: Test build script (web target)
+      run: ./build-wasm.sh --target web
+
+    - name: Verify output
+      run: |
+        test -d pkg
+        test -f pkg/plush_bg.wasm
+        test -f pkg/plush.js
+        echo "✓ Build script works correctly"
+
+  # Size optimization check
+  wasm-size-check:
+    name: Wasm size optimization
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: wasm32-unknown-unknown
+
+    - name: Install wasm-pack
+      run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+    - name: Install wasm-opt
+      run: |
+        wget https://github.com/WebAssembly/binaryen/releases/download/version_116/binaryen-version_116-x86_64-linux.tar.gz
+        tar xzf binaryen-version_116-x86_64-linux.tar.gz
+        sudo cp binaryen-version_116/bin/wasm-opt /usr/local/bin/
+
+    - name: Build release
+      run: wasm-pack build --target web --release --no-default-features
+
+    - name: Check sizes
+      run: |
+        echo "=== Build Sizes ==="
+        ORIGINAL_SIZE=$(stat -c%s pkg/plush_bg.wasm)
+        echo "Original: $ORIGINAL_SIZE bytes ($(numfmt --to=iec-i --suffix=B $ORIGINAL_SIZE))"
+
+        wasm-opt -Oz -o pkg/plush_bg_opt.wasm pkg/plush_bg.wasm
+        OPTIMIZED_SIZE=$(stat -c%s pkg/plush_bg_opt.wasm)
+        echo "Optimized: $OPTIMIZED_SIZE bytes ($(numfmt --to=iec-i --suffix=B $OPTIMIZED_SIZE))"
+
+        REDUCTION=$((100 - (OPTIMIZED_SIZE * 100 / ORIGINAL_SIZE)))
+        echo "Size reduction: ${REDUCTION}%"
+
+        gzip -c pkg/plush_bg_opt.wasm > pkg/plush_bg_opt.wasm.gz
+        GZIPPED_SIZE=$(stat -c%s pkg/plush_bg_opt.wasm.gz)
+        echo "Gzipped: $GZIPPED_SIZE bytes ($(numfmt --to=iec-i --suffix=B $GZIPPED_SIZE))"
+
+    - name: Comment sizes on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const originalSize = fs.statSync('pkg/plush_bg.wasm').size;
+          const optimizedSize = fs.statSync('pkg/plush_bg_opt.wasm').size;
+          const gzippedSize = fs.statSync('pkg/plush_bg_opt.wasm.gz').size;
+
+          const body = `### WebAssembly Build Sizes
+
+          | Build | Size |
+          |-------|------|
+          | Original | ${(originalSize / 1024).toFixed(2)} KB |
+          | Optimized (-Oz) | ${(optimizedSize / 1024).toFixed(2)} KB |
+          | Gzipped | ${(gzippedSize / 1024).toFixed(2)} KB |
+
+          Size reduction: ${(100 - (optimizedSize * 100 / originalSize)).toFixed(1)}%`;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });

@@ -5,12 +5,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
 
     - name: Install Rust toolchain
-      uses: actions-rs/toolchain@v1
-      with:
-          toolchain: stable
+      uses: dtolnay/rust-toolchain@stable
 
     - name: Install SDL2
       run: |
@@ -18,13 +16,19 @@ jobs:
         sudo apt-get update -y -qq
         sudo apt-get install libsdl2-dev
 
-    - name: Build VM
+    - name: Build VM (debug)
       run: cargo build
 
-    - name: Release build
+    - name: Build VM (release)
       run: cargo build --release
 
-    - name: Test VM
+    - name: Test library without SDL (Wasm compatibility)
+      run: |
+        echo "Testing library build without SDL to ensure Wasm compatibility..."
+        cargo build --lib --no-default-features
+        cargo test --lib --no-default-features
+
+    - name: Test VM with SDL
       run: RUST_BACKTRACE=1 cargo test
 
     - name: Test plush command-line arguments
