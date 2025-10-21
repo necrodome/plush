@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plush WebAssembly Example</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        textarea {
+            width: 100%;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        #output {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            min-height: 100px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .example-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
+        }
+        .example-btn {
+            background: #2196F3;
+            padding: 8px 16px;
+            font-size: 14px;
+        }
+        .example-btn:hover {
+            background: #0b7dda;
+        }
+        .error {
+            color: #f44336;
+        }
+        .success {
+            color: #4CAF50;
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+    </style>
+</head>
+<body>
+    <h1>🚀 Plush WebAssembly REPL</h1>
+
+    <div class="container">
+        <div id="status" class="status">Loading Plush WebAssembly module...</div>
+    </div>
+
+    <div class="container">
+        <h2>Code Editor</h2>
+        <textarea id="code" rows="15">// Fibonacci example
+let fib = fn(n) {
+  if n <= 1 {
+    n
+  } else {
+    fib(n - 1) + fib(n - 2)
+  }
+};
+
+// Calculate the 10th Fibonacci number
+fib(10)</textarea>
+
+        <button id="runBtn" onclick="runCode()" disabled>Run Code</button>
+
+        <div class="example-buttons">
+            <button class="example-btn" onclick="loadExample('fibonacci')">Fibonacci</button>
+            <button class="example-btn" onclick="loadExample('factorial')">Factorial</button>
+            <button class="example-btn" onclick="loadExample('actors')">Actors</button>
+            <button class="example-btn" onclick="loadExample('strings')">Strings</button>
+            <button class="example-btn" onclick="loadExample('recursion')">Recursion</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <h2>Output</h2>
+        <div id="output">Run some code to see output...</div>
+    </div>
+
+    <script type="module">
+        import init, { plush_eval, PlushVM } from './pkg/plush.js';
+
+        let plushReady = false;
+
+        // Initialize the Plush WebAssembly module
+        async function initializePlush() {
+            try {
+                await init();
+                plushReady = true;
+                document.getElementById('status').innerHTML =
+                    '<span class="success">✓ Plush WebAssembly module loaded successfully!</span>';
+                document.getElementById('runBtn').disabled = false;
+
+                // Run the initial example
+                window.runCode();
+            } catch (e) {
+                document.getElementById('status').innerHTML =
+                    `<span class="error">✗ Failed to load Plush: ${e}</span>`;
+                document.getElementById('output').innerHTML =
+                    `<span class="error">Error: ${e}\n\nMake sure you built the Wasm module with:\n  ./build-wasm.sh\n\nAnd serve this page from an HTTP server (not file://).</span>`;
+            }
+        }
+
+        // Run the code in the editor
+        window.runCode = function() {
+            if (!plushReady) {
+                document.getElementById('output').textContent = 'Plush is still loading...';
+                return;
+            }
+
+            const code = document.getElementById('code').value;
+            const outputEl = document.getElementById('output');
+
+            try {
+                const startTime = performance.now();
+                const result = plush_eval(code);
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(2);
+
+                outputEl.innerHTML = `<span class="success">Result:</span> ${escapeHtml(result)}\n\n<span style="color: #888">Execution time: ${duration}ms</span>`;
+            } catch (e) {
+                outputEl.innerHTML = `<span class="error">Error:</span> ${escapeHtml(e.toString())}`;
+            }
+        };
+
+        // Load example code
+        window.loadExample = function(example) {
+            const codeEl = document.getElementById('code');
+
+            const examples = {
+                fibonacci: `// Fibonacci sequence
+let fib = fn(n) {
+  if n <= 1 {
+    n
+  } else {
+    fib(n - 1) + fib(n - 2)
+  }
+};
+
+// Calculate the 15th Fibonacci number
+fib(15)`,
+
+                factorial: `// Factorial function
+let factorial = fn(n) {
+  if n <= 1 {
+    1
+  } else {
+    n * factorial(n - 1)
+  }
+};
+
+// Calculate 10!
+factorial(10)`,
+
+                actors: `// Actor-based message passing
+let counter = fn() {
+  let count = 0;
+  loop {
+    let msg = $actor_recv();
+    count = count + 1;
+    $println("Actor received message #" + count + ": " + msg);
+
+    if count >= 3 {
+      break;
+    }
+  }
+  count
+};
+
+// Spawn actor and send messages
+let actor_id = $actor_spawn(counter);
+$actor_send(actor_id, "Hello");
+$actor_send(actor_id, "from");
+$actor_send(actor_id, "Wasm!");
+
+// Wait for actor to finish
+$actor_join(actor_id)`,
+
+                strings: `// String manipulation
+let greeting = "Hello";
+let target = "WebAssembly";
+let message = greeting + ", " + target + "!";
+
+$println(message);
+$println("Message length: " + message.length);
+
+message`,
+
+                recursion: `// Sum of squares using recursion
+let sum_squares = fn(n) {
+  if n <= 0 {
+    0
+  } else {
+    n * n + sum_squares(n - 1)
+  }
+};
+
+// Calculate 1² + 2² + 3² + ... + 10²
+sum_squares(10)`
+            };
+
+            if (examples[example]) {
+                codeEl.value = examples[example];
+            }
+        };
+
+        // HTML escape utility
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Allow Ctrl+Enter to run code
+        document.getElementById('code').addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                window.runCode();
+            }
+        });
+
+        // Initialize on page load
+        initializePlush();
+    </script>
+
+    <div class="container">
+        <h3>Instructions</h3>
+        <ul>
+            <li>Write Plush code in the editor above</li>
+            <li>Click "Run Code" or press <code>Ctrl+Enter</code> to execute</li>
+            <li>Try the example buttons to see different features</li>
+            <li>Check the browser console for <code>$println()</code> output</li>
+        </ul>
+
+        <h3>Available Features</h3>
+        <ul>
+            <li>✓ Variables, functions, closures</li>
+            <li>✓ Arrays and objects</li>
+            <li>✓ Actors and message passing</li>
+            <li>✓ String operations</li>
+            <li>✓ All math operations</li>
+            <li>✓ Control flow (if/else, loops)</li>
+            <li>✗ Graphics (<code>$window_*</code>) - not available in Wasm</li>
+            <li>✗ Audio (<code>$audio_*</code>) - not available in Wasm</li>
+        </ul>
+
+        <h3>Building This Example</h3>
+        <ol>
+            <li>Build the Wasm module: <code>./build-wasm.sh</code></li>
+            <li>Start a local server: <code>python3 -m http.server 8000</code></li>
+            <li>Open: <code>http://localhost:8000/wasm-example.html</code></li>
+        </ol>
+    </div>
+</body>
+</html>

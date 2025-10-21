@@ -5,11 +5,29 @@ name = "plush"
 version = "0.2.0"
 edition = "2021"
 
+# Declare both binary and library targets
+[lib]
+name = "plush"
+path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "plush"
+path = "src/main.rs"
+required-features = ["sdl"]
+
 [dependencies]
-sdl2 = "0.38.0"     # needed for graphics and sound
-#libc = "0.2.169"   # needed for malloc, mmap
+# SDL2 is optional - only needed for native builds with graphics/audio
+sdl2 = { version = "0.38.0", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+# Wasm dependencies - only needed for WebAssembly builds
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1"
 
 [features]
+default = ["sdl"]
+sdl = ["dep:sdl2"]
 count_insns = []
 
 [profile.dev]

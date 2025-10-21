@@ -5,6 +5,9 @@ use std::time::Duration;
 use crate::alloc::Alloc;
 use crate::vm::{Value, VM, Actor};
 use crate::ast::Expr;
+
+// SDL-dependent imports (audio and window)
+#[cfg(feature = "sdl")]
 use crate::audio::{audio_open_output, audio_write_samples, audio_open_input, audio_read_samples};
 
 /// Host function signature
@@ -93,6 +96,7 @@ impl HostFn
 pub fn get_host_const(name: &str) -> Expr
 {
     use FnPtr::*;
+    #[cfg(feature = "sdl")]
     use crate::window::*;
 
     static TIME_CURRENT_MS: HostFn = HostFn { name: "time_current_ms", f: Fn0_1(time_current_ms) };
@@ -109,11 +113,17 @@ pub fn get_host_const(name: &str) -> Expr
     static ACTOR_SEND: HostFn = HostFn { name: "actor_send", f: Fn2_1(actor_send) };
     static ACTOR_RECV: HostFn = HostFn { name: "actor_recv", f: Fn0_1(actor_recv) };
     static ACTOR_POLL: HostFn = HostFn { name: "actor_poll", f: Fn0_1(actor_poll) };
+    #[cfg(feature = "sdl")]
     static WINDOW_CREATE: HostFn = HostFn { name: "window_create", f: Fn4_1(window_create) };
+    #[cfg(feature = "sdl")]
     static WINDOW_DRAW_FRAME: HostFn = HostFn { name: "window_draw_frame", f: Fn2_0(window_draw_frame) };
+    #[cfg(feature = "sdl")]
     static AUDIO_OPEN_OUTPUT: HostFn = HostFn { name: "audio_open_output", f: Fn2_1(audio_open_output) };
+    #[cfg(feature = "sdl")]
     static AUDIO_WRITE_SAMPLES: HostFn = HostFn { name: "audio_write_samples", f: Fn2_0(audio_write_samples) };
+    #[cfg(feature = "sdl")]
     static AUDIO_OPEN_INPUT: HostFn = HostFn { name: "audio_open_input", f: Fn2_1(audio_open_input) };
+    #[cfg(feature = "sdl")]
     static AUDIO_READ_SAMPLES: HostFn = HostFn { name: "audio_read_samples", f: Fn4_0(audio_read_samples) };
     static EXIT: HostFn = HostFn { name: "exit", f: Fn1_0(exit) };
 
@@ -137,13 +147,19 @@ pub fn get_host_const(name: &str) -> Expr
         "actor_recv" => &ACTOR_RECV,
         "actor_poll" => &ACTOR_POLL,
 
+        #[cfg(feature = "sdl")]
         "window_create" => &WINDOW_CREATE,
+        #[cfg(feature = "sdl")]
         "window_draw_frame" => &WINDOW_DRAW_FRAME,
 
+        #[cfg(feature = "sdl")]
         "audio_open_output" => &AUDIO_OPEN_OUTPUT,
+        #[cfg(feature = "sdl")]
         "audio_write_samples" => &AUDIO_WRITE_SAMPLES,
 
+        #[cfg(feature = "sdl")]
         "audio_open_input" => &AUDIO_OPEN_INPUT,
+        #[cfg(feature = "sdl")]
         "audio_read_samples" => &AUDIO_READ_SAMPLES,
 
         "exit" => &EXIT,

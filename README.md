@@ -35,6 +35,24 @@ Caveats and limitations:
 
 For a detailed guide to the Plush language, please see the [Plush Language Quickstart](docs/language.md).
 
+## WebAssembly Support
+
+Plush can now be compiled to WebAssembly and run in web browsers! This allows you to:
+- Run Plush programs directly in the browser without any installation
+- Embed Plush in web applications
+- Use Plush for client-side scripting
+
+**Quick start:**
+```sh
+./build-wasm.sh
+python3 -m http.server 8000
+# Open http://localhost:8000/wasm-example.html
+```
+
+For complete documentation on building and using the Wasm target, see [WASM.md](WASM.md).
+
+**Note:** The Wasm build includes the core VM and language features but excludes SDL2-dependent functionality (graphics and audio). Actor-based concurrency, string operations, and all core language features work normally.
+
 ## Build Instructions
 
 Dependencies:

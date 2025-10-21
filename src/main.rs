@@ -4,6 +4,9 @@
 #![allow(unused_imports)]
 #![allow(unused_parens)]
 
+// This binary requires the SDL feature
+#![cfg(feature = "sdl")]
+
 mod utils;
 mod ast;
 mod lexer;
@@ -20,8 +23,6 @@ mod deepcopy;
 mod window;
 mod audio;
 mod exec_tests;
-
-extern crate sdl2;
 use std::env;
 use std::process::exit;
 use std::sync::{Arc, Mutex};
