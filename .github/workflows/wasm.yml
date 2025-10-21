@@ -2,7 +2,6 @@ name: WebAssembly Build and Test
 
 on:
   push:
-    branches: [ main, master ]
     paths:
       - 'src/**'
       - 'Cargo.toml'
@@ -11,7 +10,6 @@ on:
       - 'build-wasm.sh'
       - 'tests/**'
   pull_request:
-    branches: [ main, master ]
     paths:
       - 'src/**'
       - 'Cargo.toml'
