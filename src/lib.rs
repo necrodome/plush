@@ -4,6 +4,8 @@
 #![allow(unused_imports)]
 #![allow(unused_parens)]
 
+use std::sync::Mutex;
+
 // Core modules (always available)
 mod utils;
 mod ast;
@@ -26,6 +28,10 @@ mod host;
 mod window;
 #[cfg(feature = "sdl")]
 mod audio;
+
+/// Command-line arguments accessible to the program
+/// Used by host functions to access command-line args
+pub static REST_ARGS: Mutex<Vec<String>> = Mutex::new(vec![]);
 
 // Re-export public API
 pub use vm::{VM, Value, Actor};

@@ -32,6 +32,7 @@ use crate::ast::Program;
 use crate::parser::{parse_file, parse_str};
 
 /// Command-line arguments accessible to the program
+/// Note: This is duplicated in lib.rs for library-only builds
 pub static REST_ARGS: Mutex<Vec<String>> = Mutex::new(vec![]);
 
 /// Command-line options
